@@ -1,0 +1,20 @@
+# quant
+Quantization kernel
+
+# ---------- Profiler outputs ----------
+# Nsight Systems
+*.nsys-rep
+*.qdrep
+*.qdstrm
+*.sqlite
+
+# Nsight Compute
+*.ncu-rep
+*.ncu-proj
+
+# Output Directory
+**/results/*.nsys-rep
+**/results/*.ncu-rep
+**/results/*.sqlite
+**/results/*.csv
+
