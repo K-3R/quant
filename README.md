@@ -1,2 +1,2 @@
-# quant
+# Quantization Kernel
 Quantization kernel
