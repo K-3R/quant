@@ -18,16 +18,12 @@ using a two-level scale: a per-group scale stored in FP8 (E4M3) multiplied by a 
 | 3 | CUDA fused kernel | custom tiled shared-memory GEMM |
 | 4 | CUDA fused kernel | cuBLAS SGEMM |
 
-Config 3 vs 4 isolates the GEMM contribution; config 2 vs 4 isolates the quantization contribution.
-The custom `MatMul` kernel (16×16 tiles, shared memory) is kept in the tree for this comparison —
-cuBLAS won on latency, so config 4 is the shipped path.
-
 ## Pipeline
 
 ```
 quantize_weight(W)          # once, at model load
- ├─ TensorAbsMax            # per-tensor absmax → s_t
- └─ FakeQuantRowDir         # per-group absmax → FP8 s_g → quant/dequant
+ ├─ TensorAbsMax            # per-tensor absmax → FP32 tensor scaling factor
+ └─ FakeQuantRowDir         # per-group absmax → FP8 group scaling factor → quant/dequant
 
 qmatmul(X, Wq)              # every forward
  ├─ TensorAbsMax
