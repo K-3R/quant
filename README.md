@@ -13,7 +13,7 @@ using a two-level scale: a per-group scale stored in FP8 (E4M3) multiplied by a 
 
 | # | Label | Quantization | GEMM |
 |---|---|---|---|
-| 1 | `TF32` | none (baseline) | cuBLAS SGEMM |
+| 1 | `tf32` | none (baseline) | cuBLAS SGEMM |
 | 2 | `ref-fq` | PyTorch elementwise chain | cuBLAS SGEMM |
 | 3 | `tiled` | CUDA fused kernel | custom tiled shared-memory GEMM (`custom_qmatmul`) |
 | 4 | `kernel` | CUDA fused kernel | cuBLAS SGEMM (`qmatmul`) |
