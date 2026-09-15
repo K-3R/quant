@@ -80,6 +80,37 @@ since it is what makes the GEMM contribution separable from the quantization con
 
 ## 4️⃣ Methodology
 
+### 📍 Naive PyTorch Evaluation
+### 📍 Naive Evaluation
+
+```bash
+python microbench.py
+```
+
+Latency is measured with `torch.profiler`, which uses CUPTI to capture the name and duration of each GPU kernel as it completes.
+
+```text
+=== #4 qmatmul | prefill c_attn | M=4096 K=768 N=2304 ===
+  category            us/call    share
+  TensorAbsMax           26.7     4.5%
+  FakeQuantColDir        51.7     8.7%
+  GEMM                  512.9    86.5%
+  memset/zeros            1.5     0.3%
+  total                 592.8   100.0%
+  quant share of (quant+GEMM): 13.3%
+  cuBLAS kernel: cutlass_80_tensorop_s1688gemm_256x128_16x3_nn_align4
+
+=== #3 custom_qmatmul | prefill c_attn | M=4096 K=768 N=2304 ===
+  category            us/call    share
+  TensorAbsMax           24.3     0.3%
+  FakeQuantColDir        54.3     0.7%
+  MatMul               8074.3    99.0%
+  memset/zeros            1.6     0.0%
+  total                8154.5   100.0%
+  quant share of (quant+GEMM): 1.0%
+```
+
+
 ### 📍 Nsight Systems — where the time goes
 
 ```bash
