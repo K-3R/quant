@@ -6,14 +6,14 @@ using a two-level scale: a per-group scale stored in FP8 (E4M3) multiplied by a 
 
 ## 💡 Goals
 
-1. **Minimal quantization overhead** relative to an FP32 `torch.matmul` baseline.
+1. **Minimal quantization overhead** relative to an cuBLAS TF32 `torch.matmul` baseline.
 2. **Faster than PyTorch-native fake-quantization.** The PyTorch path (`amax` → `div` → `round` → `clamp` → `mul`) launches a separate kernel per op and round-trips the tensor through HBM each time. Fusing this into a single kernel should win on latency.
 
 ## 1️⃣ Configurations Compared
 
 | # | Label | Quantization | GEMM |
 |---|---|---|---|
-| 1 | `fp32` | none (baseline) | cuBLAS SGEMM |
+| 1 | `TF32` | none (baseline) | cuBLAS SGEMM |
 | 2 | `ref-fq` | PyTorch elementwise chain | cuBLAS SGEMM |
 | 3 | `tiled` | CUDA fused kernel | custom tiled shared-memory GEMM (`custom_qmatmul`) |
 | 4 | `kernel` | CUDA fused kernel | cuBLAS SGEMM (`qmatmul`) |
@@ -40,14 +40,14 @@ qmatmul(X, Wq)                # config 4
 
 ## 3️⃣ Results
 
-Measured on GPT-2, FP32, batched end-to-end. Ratio columns are the speedup of config 4 over the
+Measured on GPT-2, TF32, batched end-to-end. Ratio columns are the speedup of config 4 over the
 indicated config — values below 1.00 mean config 4 is slower.
 
 > Environment: NVIDIA RTX A6000 · CUDA 12.1 · PyTorch 2.5.1+cu121
 
 ### 📍 Prefill (ms)
 
-| | | | fp32 | ref-fq | tiled | kernel | 4/1 | 4/2 | 4/3 |
+| | | | tf32 | ref-fq | tiled | kernel | 4/1 | 4/2 | 4/3 |
 |---|---|---|---|---|---|---|---|---|---|
 | B=1 | S=512 | M=512 | 15.60 | 122.53 | 78.71 | **17.92** | ×0.87 | ×6.84 | ×4.39 |
 | B=8 | S=512 | M=4096 | 103.03 | 226.83 | 551.76 | **126.25** | ×0.82 | ×1.80 | ×4.37 |
@@ -55,14 +55,14 @@ indicated config — values below 1.00 mean config 4 is slower.
 
 ### 📍 Decode (ms/token, KV cache, M=1)
 
-| | | fp32 | ref-fq | tiled | kernel | 4/1 | 4/2 | 4/3 |
+| | | tf32 | ref-fq | tiled | kernel | 4/1 | 4/2 | 4/3 |
 |---|---|---|---|---|---|---|---|---|
 | B=1 | prompt=128 | 3.80 | 63.94 | 8.79 | **4.36** | ×0.87 | ×14.67 | ×2.02 |
 | B=8 | prompt=128 | 5.39 | 94.26 | 10.21 | **6.47** | ×0.83 | ×14.56 | ×1.58 |
 
 ### 💬 Reading the numbers
 
-**Goal 1 — Quantization overhead.** Quantization costs 15–22% over the FP32 baseline (×0.87 to ×0.82).
+**Goal 1 — Quantization overhead.** Quantization costs 15–22% over the TF32 baseline (×0.87 to ×0.82).
 
 **Goal 2 — vs. PyTorch fake-quant.** Config 4 wins in every case, but the margin is strongly
 shape-dependent. At prefill the advantage shrinks as M grows (×6.84 → ×1.80 → ×1.30): the GEMM
@@ -83,7 +83,7 @@ since it is what makes the GEMM contribution separable from the quantization con
 ### 📍 Nsight Systems — where the time goes
 
 ```bash
-nsys profile -t cuda,nvtx,cublas --cuda-memory-usage=true -o report python bench.py
+nsys profile -t cuda,nvtx,cublas --cuda-memory-usage=true -o report python microbench.py
 ```
 
 Tracked: fraction of `qmatmul` spent in quantization kernels (the headline number), which cuBLAS
