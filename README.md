@@ -143,7 +143,7 @@ Python NVTX:  "#3 custom_qmatmul"
 
 ```bash
 ncu --set full --target-processes all -k "regex:TensorAbsMax|FakeQuant" \
-    --import-source yes -o prof python bench.py
+    --import-source yes -o prof python microbench.py
 ```
 
 All three quantization kernels are memory-bound (4B read / 4B write per element), so effective
