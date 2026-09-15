@@ -80,7 +80,6 @@ since it is what makes the GEMM contribution separable from the quantization con
 
 ## 4️⃣ Methodology
 
-### 📍 Naive PyTorch Evaluation
 ### 📍 Naive Evaluation
 
 ```bash
