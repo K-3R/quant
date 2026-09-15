@@ -18,24 +18,69 @@ using a two-level scale: a per-group scale stored in FP8 (E4M3) multiplied by a 
 | 3 | `tiled` | CUDA fused kernel | custom tiled shared-memory GEMM (`custom_qmatmul`) |
 | 4 | `kernel` | CUDA fused kernel | cuBLAS SGEMM (`qmatmul`) |
 
-## Pipeline
+## 2️⃣ Code Hierarchy
 
 ```
-quantize_weight(W)          # once, at model load
- ├─ TensorAbsMax            # per-tensor absmax → FP32 tensor scaling factor
- └─ FakeQuantRowDir         # per-group absmax → FP8 group scaling factor → quant/dequant
+quantize_weight(W)            # once, at model load
+ ├─ TensorAbsMax              # per-tensor absmax → FP32 tensor scale
+ └─ FakeQuantRowDir           # per-group absmax → FP8 group scale → quant/dequant
+                              # returns (Wq, scale)
 
-qmatmul(X, Wq)              # every forward
+custom_qmatmul(X, Wq)         # config 3
+ ├─ TensorAbsMax              # per-tensor absmax over X
+ ├─ FakeQuantColDir           # per-group absmax → FP8 group scale → quant/dequant
+ └─ MatMul                    # custom 16×16 tiled shared-memory GEMM
+
+qmatmul(X, Wq)                # config 4
  ├─ TensorAbsMax
  ├─ FakeQuantColDir
- └─ at::matmul              # cuBLAS SGEMM
+ └─ at::matmul                # cuBLAS SGEMM
+
 ```
 
-Group size 16, symmetric INT4 `[-7, +7]`, `s = s_g * s_t` where `s_t (FP32) = tensor_absmax / E4M3_MAX / QMAX`.
+## 3️⃣ Results
 
-## Methodology
+Measured on GPT-2, FP32, batched end-to-end. Ratio columns are the speedup of config 4 over the
+indicated config — values below 1.00 mean config 4 is slower.
 
-### Nsight Systems — end-to-end latency
+> Environment: _GPU / CUDA / PyTorch versions_
+
+### 📍 Prefill
+
+| | | | fp32 | ref-fq | tiled | kernel | 4/1 | 4/2 | 4/3 |
+|---|---|---|---|---|---|---|---|---|---|
+| B=1 | S=512 | M=512 | 15.60 ms | 122.53 ms | 78.71 ms | **17.92 ms** | ×0.87 | ×6.84 | ×4.39 |
+| B=8 | S=512 | M=4096 | 103.03 ms | 226.83 ms | 551.76 ms | **126.25 ms** | ×0.82 | ×1.80 | ×4.37 |
+| B=16 | S=1024 | M=16384 | 430.80 ms | 669.64 ms | 2335.29 ms | **516.30 ms** | ×0.83 | ×1.30 | ×4.52 |
+
+### 📍 Decode (ms/token, KV cache, M=1)
+
+| | | fp32 | ref-fq | tiled | kernel | 4/1 | 4/2 | 4/3 |
+|---|---|---|---|---|---|---|---|---|
+| B=1 | prompt=128 | 3.80 ms | 63.94 ms | 8.79 ms | **4.36 ms** | ×0.87 | ×14.67 | ×2.02 |
+| B=8 | prompt=128 | 5.39 ms | 94.26 ms | 10.21 ms | **6.47 ms** | ×0.83 | ×14.56 | ×1.58 |
+
+### 💬 Reading the numbers
+
+**Goal 1 — Quantization overhead.** Quantization costs 15–22% over the FP32 baseline (×0.87 to ×0.82).
+
+**Goal 2 — vs. PyTorch fake-quant.** Config 4 wins in every case, but the margin is strongly
+shape-dependent. At prefill the advantage shrinks as M grows (×6.84 → ×1.80 → ×1.30): the GEMM
+dominates at large M, so the per-op HBM round-trips of the PyTorch chain amortize away. At decode the
+advantage jumps to ~×14.6, because with M=1 there is almost no GEMM to hide behind and the PyTorch
+path is paying almost pure kernel-launch and memory-round-trip overhead.
+
+**Why cuBLAS is the shipped GEMM.** The custom tiled kernel loses by ×4.4–4.5 at prefill — a plain
+16×16 shared-memory tiling has no register blocking, no vectorized loads, and no Tensor Core path, so
+it falls far short of cuBLAS on compute-bound shapes. At decode the gap compresses to ×1.6–2.0:
+with M=1 the operation is effectively a GEMV and memory-bound regardless of tiling, so there is much
+less for a tuned kernel to win. The tiled kernel is kept in the tree as config 3 rather than removed,
+since it is what makes the GEMM contribution separable from the quantization contribution.
+
+
+## 4️⃣ Methodology
+
+### 📍 Nsight Systems — where the time goes
 
 ```bash
 nsys profile -t cuda,nvtx,cublas --cuda-memory-usage=true -o report python bench.py
@@ -46,7 +91,7 @@ kernel `at::matmul` selects (SGEMM vs TF32 path), inter-kernel gaps from per-for
 the `zeros()` memset, and launch overhead as kernels shrink. Measured separately for prefill-shaped
 (large M) and decode-shaped (small M) inputs, since the quantization share grows as M drops.
 
-### Nsight Compute — per-kernel metrics
+### 📍 Nsight Compute — per-kernel metrics
 
 ```bash
 ncu --set full --target-processes all -k "regex:TensorAbsMax|FakeQuant" \
@@ -74,7 +119,7 @@ Measurement notes: ≥10 warmup iterations before timing; `torch.backends.cuda.m
 pinned to the same value across all configs; `--replay-mode application` used to cross-check
 anomalous ncu results.
 
-## Results
+## 5️⃣ Results
 
 > Environment: _GPU / CUDA / PyTorch versions_ — Shapes: _M, K, N_
 
@@ -97,25 +142,7 @@ anomalous ncu results.
 | `FakeQuantColDir` | | | | |
 | `FakeQuantRowDir` | | | | |
 
-## Known Issues / In Progress
-
-**`TensorAbsMax` — shared-atomic serialization.** All 256 threads per block `atomicMax` into a single
-shared variable, serializing up to 256 ways. Moving to thread-local max → warp shuffle → one shared
-atomic per warp → one global atomic per block.
-
-**`FakeQuantRowDir` — poor coalescing.** With block shape `(AX=4, AY=64)`, a warp spans
-`threadIdx.x = 0..3` and `threadIdx.y = 0..7`, so each warp touches 8 different rows at 16B each and
-over-fetches sectors. Reworking so x covers contiguous addresses, with the group reduction as a y-loop.
-
-**Warp divergence in group reduction.** Both fake-quant kernels run a 16-iteration loop under
-`if (lane == 0)`, idling 15/16 threads. Replacing with a 4-stage `__shfl_xor_sync` reduction, which
-also removes one `__syncthreads()`.
-
-**Redundant passes and allocation.** `TensorAbsMax` and `FakeQuant*` each read the input tensor, and
-the per-forward `tmax` tensor triggers a separate memset kernel. Investigating single-pass fusion and
-buffer reuse.
-
-## Next Steps
+## 6️⃣ Next Steps
 
 This is *fake* quantization: error is simulated and values are restored to FP32 before an FP32 GEMM,
 so neither compute nor memory footprint actually drops. The current objective is accuracy simulation
@@ -129,7 +156,7 @@ Real INT4 low-precision compute is next:
   `sm__pipe_tensor_op_*_cycles_active`
 - Benchmarking against CUTLASS mixed-input GEMM, Marlin, and Machete
 
-## Usage
+## 7️⃣ Usage
 
 ```python
 import torch
