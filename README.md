@@ -43,7 +43,7 @@ qmatmul(X, Wq)                # config 4
 Measured on GPT-2, FP32, batched end-to-end. Ratio columns are the speedup of config 4 over the
 indicated config — values below 1.00 mean config 4 is slower.
 
-> Environment: _GPU / CUDA / PyTorch versions_
+> Environment: NVIDIA RTX A6000 · CUDA 12.1 · PyTorch 2.5.1+cu121
 
 ### 📍 Prefill (ms)
 
