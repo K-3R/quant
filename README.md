@@ -4,7 +4,7 @@ A PyTorch extension implementing group-wise INT4 fake-quantization in CUDA.
 Activations and weights are quantized along K (input-channel direction) in groups of 16,
 using a two-level scale: a per-group scale stored in FP8 (E4M3) multiplied by a per-tensor scale.
 
-## Goals
+## 💡 Goals
 
 1. **Minimal quantization overhead** relative to an FP32 `torch.matmul` baseline.
 2. **Faster than PyTorch-native fake-quantization.** The PyTorch path (`amax` → `div` → `round` → `clamp` → `mul`) launches a separate kernel per op and round-trips the tensor through HBM each time. Fusing this into a single kernel should win on latency.
