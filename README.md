@@ -122,6 +122,24 @@ kernel `at::matmul` selects (SGEMM vs TF32 path), inter-kernel gaps from per-for
 the `zeros()` memset, and launch overhead as kernels shrink. Measured separately for prefill-shaped
 (large M) and decode-shaped (small M) inputs, since the quantization share grows as M drops.
 
+
+```text
+Python NVTX:  "#4 qmatmul"
+  └─ C++ NvtxRange: "qmatmul"
+       ├─ "alloc+zeros"          # empty(Xq, scale) + zeros(tmax)
+       ├─ "TensorAbsMax"
+       ├─ "FakeQuantColDir"
+       └─ "cuBLAS GEMM"          # at::matmul → TF32 tensor-core
+
+Python NVTX:  "#3 custom_qmatmul"
+  └─ C++ NvtxRange: "custom_qmatmul"
+       ├─ "alloc+zeros"          # empty(Xq, scale, C) + zeros(tmax)
+       ├─ "TensorAbsMax"
+       ├─ "FakeQuantColDir"
+       └─ "MatMul"               # launch_matmul, 16×16 tiled FP32
+```
+
+
 ### 📍 Nsight Compute — per-kernel metrics
 
 ```bash
