@@ -11,12 +11,12 @@ using a two-level scale: a per-group scale stored in FP8 (E4M3) multiplied by a 
 
 ## 1️⃣ Configurations Compared
 
-| # | Quantization | GEMM |
-|---|---|---|
-| 1 | none (FP32 baseline) | cuBLAS SGEMM |
-| 2 | PyTorch elementwise chain | cuBLAS SGEMM |
-| 3 | CUDA fused kernel | custom tiled shared-memory GEMM |
-| 4 | CUDA fused kernel | cuBLAS SGEMM |
+| # | Label | Quantization | GEMM |
+|---|---|---|---|
+| 1 | `fp32` | none (baseline) | cuBLAS SGEMM |
+| 2 | `ref-fq` | PyTorch elementwise chain | cuBLAS SGEMM |
+| 3 | `tiled` | CUDA fused kernel | custom tiled shared-memory GEMM (`custom_qmatmul`) |
+| 4 | `kernel` | CUDA fused kernel | cuBLAS SGEMM (`qmatmul`) |
 
 ## Pipeline
 
