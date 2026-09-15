@@ -9,7 +9,7 @@ using a two-level scale: a per-group scale stored in FP8 (E4M3) multiplied by a 
 1. **Minimal quantization overhead** relative to an FP32 `torch.matmul` baseline.
 2. **Faster than PyTorch-native fake-quantization.** The PyTorch path (`amax` → `div` → `round` → `clamp` → `mul`) launches a separate kernel per op and round-trips the tensor through HBM each time. Fusing this into a single kernel should win on latency.
 
-## Configurations Compared
+## 1️⃣ Configurations Compared
 
 | # | Quantization | GEMM |
 |---|---|---|
@@ -31,7 +31,7 @@ qmatmul(X, Wq)              # every forward
  └─ at::matmul              # cuBLAS SGEMM
 ```
 
-Group size 16, symmetric INT4 `[-7, +7]`, `s = s_g * s_t` where `s_t = tensor_absmax / E4M3_MAX / QMAX`.
+Group size 16, symmetric INT4 `[-7, +7]`, `s = s_g * s_t` where `s_t (FP32) = tensor_absmax / E4M3_MAX / QMAX`.
 
 ## Methodology
 
