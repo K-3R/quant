@@ -113,7 +113,7 @@ Latency is measured with `torch.profiler`, which uses CUPTI to capture the name 
 ### 📍 Nsight Systems — where the time goes
 
 ```bash
-nsys profile -t cuda,nvtx,cublas --cuda-memory-usage=true -o report python microbench.py
+nsys profile -t cuda,nvtx,cublas --cuda-memory-usage=true --force-overwrite=true -o nsys/report python microbench.py
 ```
 
 Tracked: fraction of `qmatmul` spent in quantization kernels (the headline number), which cuBLAS
@@ -157,7 +157,7 @@ Python NVTX:  "#3 custom_qmatmul"
 | **Total**          | **54.50 µs** | **22.67 µs** | **2.40×** |
 
 
-### 📍 Nsight Compute — per-kernel metrics
+<!--### 📍 Nsight Compute — per-kernel metrics
 
 ```bash
 ncu --set full --target-processes all -k "regex:TensorAbsMax|FakeQuant" \
@@ -235,3 +235,4 @@ Y = ext.qmatmul(X, Wq)                 # per forward
 ```
 
 Requires `K % GROUP_SIZE == 0` and FP32 CUDA tensors.
+-->
