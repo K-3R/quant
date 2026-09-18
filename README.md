@@ -146,10 +146,12 @@ ncu --profile-from-start off --set full -f -o ncu/test python microbench.py --nc
 ### MatMul
 | Metric | Value |
 |---|---|
-| Duration | |
-| SM Throughput | |
-| DRAM Throughput | |
-| L1 Throughput | |
+| Duration [us] | 68.64 |
+| SM Throughput [%] | 22.13 |
+| DRAM Throughput [%] | 26.79 |
+| L1 Throughput [%] | 49.11 |
+
+SM, DRAM and L1 throughput are below 50%. Therefore, the MatMul kernel is latency bound.
 
 <!--
 All three quantization kernels are memory-bound (4B read / 4B write per element), so effective
