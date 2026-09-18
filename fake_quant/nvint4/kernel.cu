@@ -22,8 +22,17 @@
 // ---------------------------------------------------------------
 // Thread Layout : MM
 // ---------------------------------------------------------------
-#define BLOCK_SIZE 16
+// BLOCK_SIZE  : C tile per block
+// TILING_SIZE : K tile
+// TM, TN      : outputs per thread
+// blockDim    = (BLOCK_SIZE/TN, BLOCK_SIZE/TM)
+#define BLOCK_SIZE  64
 #define TILING_SIZE 16
+#define TM 4
+#define TN 4
+#if (BLOCK_SIZE % TM) || (BLOCK_SIZE % TN)
+#error "BLOCK_SIZE must be a multiple of TM and TN"
+#endif
 
 // ---------------------------------------------------------------
 // Thread Layout : COL Dir
@@ -185,7 +194,7 @@ __global__ void FakeQuantRowDir(DATA_TYPE* matIn, DATA_TYPE* tMax, DATA_TYPE* ma
     }
 }
 
-__global__ void MatMul(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* matC, int m, int n, int k)
+/*__global__ void MatMul(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* matC, int m, int n, int k)
 {
     // shared memory
     __shared__ DATA_TYPE sA[BLOCK_SIZE ][TILING_SIZE];
@@ -220,7 +229,7 @@ __global__ void MatMul(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* matC, int m,
         __syncthreads();
 
         for(int ich=0; ich<TILING_SIZE; ich++){
-            val += __fmul_rn(sA[localRow][ich], sB[ich][localCol]);
+            val += sA[localRow][ich] * sB[ich][localCol];
         }
         __syncthreads();
         
@@ -230,6 +239,96 @@ __global__ void MatMul(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* matC, int m,
         matC[row*n+col] = val;
     }
 
+}*/
+
+// BLOCK_SIZE  : C tile per block (64)
+// TILING_SIZE : K tile (16)
+// TM, TN      : outputs per thread (4)
+// blockDim    = (BLOCK_SIZE/TN, BLOCK_SIZE/TM) = (16, 16)
+
+__global__ void MatMul(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* matC,
+                       int m, int n, int k)
+{
+    __shared__ DATA_TYPE sA[BLOCK_SIZE][TILING_SIZE + 1];
+    __shared__ DATA_TYPE sB[TILING_SIZE][BLOCK_SIZE];
+
+    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+
+    const int threadRow = threadIdx.y * TM;
+    const int threadCol = threadIdx.x * TN;
+
+    const int blockRow = blockIdx.y * BLOCK_SIZE;
+    const int blockCol = blockIdx.x * BLOCK_SIZE;
+
+    const int numThreads = (BLOCK_SIZE / TM) * (BLOCK_SIZE / TN);
+
+    // sA 로드 담당 좌표: TILING_SIZE 열을 가로로 채움
+    const int aRow = tid / TILING_SIZE;
+    const int aCol = tid % TILING_SIZE;
+    const int aStride = numThreads / TILING_SIZE;
+
+    // sB 로드 담당 좌표: BLOCK_SIZE 열을 가로로 채움
+    const int bRow = tid / BLOCK_SIZE;
+    const int bCol = tid % BLOCK_SIZE;
+    const int bStride = numThreads / BLOCK_SIZE;
+
+    DATA_TYPE acc[TM][TN] = {0};
+
+    const int numTiles = (k + TILING_SIZE - 1) / TILING_SIZE;
+
+    for (int bID = 0; bID < numTiles; bID++) {
+        const int Boffset = bID * TILING_SIZE;
+
+        #pragma unroll
+        for (int i = 0; i < BLOCK_SIZE; i += aStride) {
+            int r  = aRow + i;
+            int gr = blockRow + r;
+            int gc = Boffset + aCol;
+            sA[r][aCol] = (gr < m && gc < k) ? matA[gr * k + gc] : 0;
+        }
+
+        #pragma unroll
+        for (int i = 0; i < TILING_SIZE; i += bStride) {
+            int r  = bRow + i;
+            int gr = Boffset + r;
+            int gc = blockCol + bCol;
+            sB[r][bCol] = (gr < k && gc < n) ? matB[gr * n + gc] : 0;
+        }
+
+        __syncthreads();
+
+        #pragma unroll
+        for (int ich = 0; ich < TILING_SIZE; ich++) {
+            DATA_TYPE a[TM], b[TN];
+
+            #pragma unroll
+            for (int i = 0; i < TM; i++)
+                a[i] = sA[threadRow + i][ich];
+
+            #pragma unroll
+            for (int j = 0; j < TN; j++)
+                b[j] = sB[ich][threadCol + j];
+
+            #pragma unroll
+            for (int i = 0; i < TM; i++)
+                #pragma unroll
+                for (int j = 0; j < TN; j++)
+                    acc[i][j] += a[i] * b[j];
+        }
+
+        __syncthreads();
+    }
+
+    #pragma unroll
+    for (int i = 0; i < TM; i++) {
+        int gr = blockRow + threadRow + i;
+        if (gr >= m) continue;
+        #pragma unroll
+        for (int j = 0; j < TN; j++) {
+            int gc = blockCol + threadCol + j;
+            if (gc < n) matC[gr * n + gc] = acc[i][j];
+        }
+    }
 }
 
 // ------------ Launch function ------------ //
@@ -252,9 +351,16 @@ void launch_fq_row(const float* in, const float* tmax, float* out, float* scale,
     FakeQuantRowDir<<<g, b, 0, s>>>((float*)in, (float*)tmax, out, scale, k, n);
 }
 
-void launch_matmul(const float* A, const float* B, float* C,
+/*void launch_matmul(const float* A, const float* B, float* C,
                    int m, int n, int k, cudaStream_t s) {
     dim3 b(BLOCK_SIZE, BLOCK_SIZE);
     dim3 g((n+BLOCK_SIZE-1)/BLOCK_SIZE, (m+BLOCK_SIZE-1)/BLOCK_SIZE);
     MatMul<<<g, b, 0, s>>>((float*)A, (float*)B, C, m, n, k);
+}*/
+
+void launch_matmul(const float* A, const float* B, float* C,
+    int m, int n, int k, cudaStream_t s) {
+    dim3 b(BLOCK_SIZE / TN, BLOCK_SIZE / TM);  // (16, 16), not (BLOCK_SIZE, BLOCK_SIZE)
+    dim3 g((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (m + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    MatMul<<<g, b, 0, s>>>((float*)A, (float*)B, (float*)C, m, n, k);
 }
