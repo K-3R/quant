@@ -153,76 +153,24 @@ ncu --profile-from-start off --set full -f -o ncu/test python microbench.py --nc
 
 SM, DRAM and L1 throughput are below 50%. Therefore, the MatMul kernel is latency bound.
 
-<!--
-All three quantization kernels are memory-bound (4B read / 4B write per element), so effective
-bandwidth — not FLOPS — is the figure of merit.
+### TensorAbsMax (Tensor Scaling Factor)
+| Metric | Value |
+|---|---|
+| Duration [us] | 21.82 |
+| SM Throughput [%] | 36.43 |
+| DRAM Throughput [%] | 70.10 |
+| L1 Throughput [%] | 38.01 |
 
-| Priority | Metric | Target |
-|---|---|---|
-| 1 | `dram__throughput.avg.pct_of_peak_sustained_elapsed` | ≥ 70–80% of peak |
-| 1 | `dram__bytes_{read,write}.sum` | compare against theoretical minimum traffic |
-| 2 | `l1tex__t_sectors_…op_ld.sum / l1tex__t_requests_…op_ld.sum` | 4 sectors/request (coalesced) |
-| 3 | `smsp__average_warps_issue_stalled_*_per_issue_active.ratio` | isolate `long_scoreboard` / `mio_throttle` / `barrier` |
-| 3 | `l1tex__t_set_accesses_pipe_lsu_mem_shared_op_atom.sum` | shared-atomic contention |
-| 4 | `smsp__thread_inst_executed_per_inst_executed.ratio` | → 32 (no divergence) |
-| 4 | `l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_*` | 0 |
-| 5 | `sm__warps_active.avg.pct_of_peak_sustained_active` | achieved vs theoretical occupancy |
+TensorAbsMax is DRAM bound.
 
-Occupancy is checked last: if bandwidth is low while occupancy is adequate, the cause is the access
-pattern or serialization, not occupancy.
+### FakeQuantRowDir (Group Quant Scaling Factor)
+| Metric | Value |
+|---|---|
+| Duration [us] | 45.70 |
+| SM Throughput [%] | 63.20 |
+| DRAM Throughput [%] | 62.09 |
+| L1 Throughput [%] | 69.00 |
+| L2 Throughput [%] | 62.09 |
+| DRAM Throughput [%] | 54.86 |
 
-Measurement notes: ≥10 warmup iterations before timing; `torch.backends.cuda.matmul.allow_tf32`
-pinned to the same value across all configs; `--replay-mode application` used to cross-check
-anomalous ncu results.
-
-## 5️⃣ Results
-
-> Environment: _GPU / CUDA / PyTorch versions_ — Shapes: _M, K, N_
-
-| Config | Latency (µs) | vs. FP32 baseline |
-|---|---|---|
-| 1. FP32 baseline | | 1.00× |
-| 2. PyTorch fake-quant + cuBLAS | | |
-| 3. Fused kernel + tiled GEMM | | |
-| 4. Fused kernel + cuBLAS | | |
-
-| Kernel | Latency (µs) | Share of `qmatmul` |
-|---|---|---|
-| `TensorAbsMax` | | |
-| `FakeQuantColDir` | | |
-| GEMM | | |
-
-| Kernel | DRAM BW (% peak) | Sectors/req | Achieved occupancy | Dominant stall |
-|---|---|---|---|---|
-| `TensorAbsMax` | | | | |
-| `FakeQuantColDir` | | | | |
-| `FakeQuantRowDir` | | | | |
-
-## 6️⃣ Next Steps
-
-This is *fake* quantization: error is simulated and values are restored to FP32 before an FP32 GEMM,
-so neither compute nor memory footprint actually drops. The current objective is accuracy simulation
-at minimal overhead.
-
-Real INT4 low-precision compute is next:
-
-- INT4-packed weight storage (2 elements/byte) for genuine memory-traffic and footprint reduction
-- Dequantization fused into the GEMM prologue (mixed-input INT4 × FP16 GEMM)
-- Tensor Core (MMA) path — at which point the figure of merit shifts from bandwidth to
-  `sm__pipe_tensor_op_*_cycles_active`
-- Benchmarking against CUTLASS mixed-input GEMM, Marlin, and Machete
-
-## 7️⃣ Usage
-
-```python
-import torch
-from torch.utils.cpp_extension import load
-
-ext = load(name="qkernel", sources=["binding.cpp", "kernel.cu"], verbose=True)
-
-Wq, w_scale = ext.quantize_weight(W)   # once, at load
-Y = ext.qmatmul(X, Wq)                 # per forward
-```
-
-Requires `K % GROUP_SIZE == 0` and FP32 CUDA tensors.
--->
+FakeQuantRowDir is L1 bound.
