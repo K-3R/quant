@@ -137,13 +137,12 @@ Python NVTX:  "#3 custom_qmatmul"
        ├─ "FakeQuantColDir"
        └─ "MatMul"               # launch_matmul, 16×16 tiled FP32
 ```
-<!--### 📍 Nsight Compute — per-kernel metrics
+### 📍 Nsight Compute — per-kernel metrics
 
 ```bash
-ncu --set full --target-processes all -k "regex:TensorAbsMax|FakeQuant" \
-    --import-source yes -o prof python microbench.py
+ncu --profile-from-start off --set full -f -o ncu/test python microbench.py --ncu --layer c_fc
 ```
-
+<---!
 All three quantization kernels are memory-bound (4B read / 4B write per element), so effective
 bandwidth — not FLOPS — is the figure of merit.
 
