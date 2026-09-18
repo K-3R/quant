@@ -138,6 +138,24 @@ Python NVTX:  "#3 custom_qmatmul"
        └─ "MatMul"               # launch_matmul, 16×16 tiled FP32
 ```
 
+### Prefill (M = 4096)
+
+| Stage | Config #3 | Config #4 | Ratio |
+|:---|---:|---:|---:|
+| `TensorAbsMax`     |    24.14 µs |   27.18 µs | 0.89× |
+| `FakeQuantColDir`  |    54.62 µs |   52.54 µs | 1.04× |
+| **GEMM**           | **7,769.01 µs** | **350.02 µs** | **22.20×** |
+| **Total**          | **7,851.75 µs** | **433.57 µs** | **18.11×** |
+
+### Decode (M = 1)
+
+| Stage | Config #3 | Config #4 | Ratio |
+|:---|---:|---:|---:|
+| `TensorAbsMax`     |   1.89 µs |   1.41 µs | 1.34× |
+| `FakeQuantColDir`  |   2.14 µs |   2.14 µs | 1.00× |
+| **GEMM**           | **46.51 µs** | **15.65 µs** | **2.97×** |
+| **Total**          | **54.50 µs** | **22.67 µs** | **2.40×** |
+
 
 ### 📍 Nsight Compute — per-kernel metrics
 
