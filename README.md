@@ -142,7 +142,7 @@ Python NVTX:  "#3 custom_qmatmul"
 ```bash
 ncu --profile-from-start off --set full -f -o ncu/test python microbench.py --ncu --layer c_fc
 ```
-<--
+<!--
 All three quantization kernels are memory-bound (4B read / 4B write per element), so effective
 bandwidth — not FLOPS — is the figure of merit.
 
