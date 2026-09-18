@@ -150,6 +150,8 @@ ncu --profile-from-start off --set full -f -o ncu/test python microbench.py --nc
 | SM Throughput [%] | 22.13 |
 | Memory Throughput [%] | 26.79 |
 | L1 Throughput [%] | 49.11 |
+| L2 Throughput [%] | 6.96 |
+| DRAM Throughput [%] | 21.97 |
 
 SM, DRAM and L1 throughput are below 50%. Therefore, the MatMul kernel is latency bound.
 
@@ -160,6 +162,8 @@ SM, DRAM and L1 throughput are below 50%. Therefore, the MatMul kernel is latenc
 | SM Throughput [%] | 36.43 |
 | Memory Throughput [%] | 70.10 |
 | L1 Throughput [%] | 38.01 |
+| L2 Throughput [%] | 22.05 |
+| DRAM Throughput [%] | 70.10 |
 
 TensorAbsMax is DRAM bound.
 
@@ -168,7 +172,6 @@ TensorAbsMax is DRAM bound.
 |---|---|
 | Duration [us] | 45.70 |
 | SM Throughput [%] | 63.20 |
-| Memory Throughput [%] | 62.09 |
 | L1 Throughput [%] | 69.00 |
 | L2 Throughput [%] | 62.09 |
 | DRAM Throughput [%] | 54.86 |
