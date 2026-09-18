@@ -11,7 +11,7 @@ using a two-level scale: a per-group scale stored in FP8 (E4M3) multiplied by a 
 
 ## 1️⃣ Configurations Compared
 
-| # | Label | Quantization | GEMM |
+| Config | Label | Quantization | GEMM |
 |---|---|---|---|
 | 1 | `tf32` | none (baseline) | cuBLAS SGEMM |
 | 2 | `ref-fq` | PyTorch elementwise chain | cuBLAS SGEMM |
@@ -47,18 +47,18 @@ indicated config — values below 1.00 mean config 4 is slower.
 
 ### 📍 Prefill (ms)
 
-| | | | tf32 | ref-fq | tiled | kernel | 4/1 | 4/2 | 4/3 |
-|---|---|---|---|---|---|---|---|---|---|
-| B=1 | S=512 | M=512 | 15.60 | 122.53 | 78.71 | **17.92** | ×0.87 | ×6.84 | ×4.39 |
-| B=8 | S=512 | M=4096 | 103.03 | 226.83 | 551.76 | **126.25** | ×0.82 | ×1.80 | ×4.37 |
-| B=16 | S=1024 | M=16384 | 430.80 | 669.64 | 2335.29 | **516.30** | ×0.83 | ×1.30 | ×4.52 |
+| | | | tf32 | ref-fq | tiled | kernel |
+|---|---|---|---|---|---|---|
+| B=1 | S=512 | M=512 | 10.51 | 28.47 | 20.38 | **12.02** |
+| B=8 | S=512 | M=4096 | 63.39 | 107.22 | 125.75 | **77.84** |
+| B=16 | S=1024 | M=16384 | 256.95 | 409.15 | 499.08 | **311.07** |
 
 ### 📍 Decode (ms/token, KV cache, M=1)
 
-| | | tf32 | ref-fq | tiled | kernel | 4/1 | 4/2 | 4/3 |
-|---|---|---|---|---|---|---|---|---|
-| B=1 | prompt=128 | 3.80 | 63.94 | 8.79 | **4.36** | ×0.87 | ×14.67 | ×2.02 |
-| B=8 | prompt=128 | 5.39 | 94.26 | 10.21 | **6.47** | ×0.83 | ×14.56 | ×1.58 |
+| | | tf32 | ref-fq | tiled | kernel |
+|---|---|---|---|---|---|
+| B=1 | prompt=128 | 3.38 | 18.98 | 8.38 | **3.80** |
+| B=8 | prompt=128 | 3.43 | 20.75 | 9.42 | **4.58** |
 
 ### 💬 Reading the numbers
 
