@@ -262,12 +262,12 @@ __global__ void MatMul(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* matC,
 
     const int numThreads = (BLOCK_SIZE / TM) * (BLOCK_SIZE / TN);
 
-    // sA 로드 담당 좌표: TILING_SIZE 열을 가로로 채움
+    // sA Load responsible coordinates: TILING_SIZE columns are loaded horizontally
     const int aRow = tid / TILING_SIZE;
     const int aCol = tid % TILING_SIZE;
     const int aStride = numThreads / TILING_SIZE;
 
-    // sB 로드 담당 좌표: BLOCK_SIZE 열을 가로로 채움
+    // sB Load responsible coordinates: BLOCK_SIZE columns are loaded horizontally
     const int bRow = tid / BLOCK_SIZE;
     const int bCol = tid % BLOCK_SIZE;
     const int bStride = numThreads / BLOCK_SIZE;
